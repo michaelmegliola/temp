@@ -31,7 +31,7 @@ import httpx
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from app import classifier, router, rules_store
-from app.models import InboundSMS, RuleCreate, SmsRoute, WebhookRoute
+from app.models import InboundSMS, RuleCreate
 
 
 def _build_inbound(message: str, from_number: str, to_number: str) -> InboundSMS:
@@ -48,21 +48,28 @@ def _build_inbound(message: str, from_number: str, to_number: str) -> InboundSMS
 # ---------------------------------------------------------------------------
 
 def cmd_rules_list() -> None:
+    from app import endpoints_store
     rules = rules_store.list_rules()
     if not rules:
         print("No rules defined.")
         return
     for rule in rules:
-        print(f"{rule.id}  {rule.route}  \"{rule.description}\"")
+        ep = endpoints_store.get_endpoint(rule.endpoint_id)
+        ep_label = f"{ep.name} → {ep.route}" if ep else f"(missing endpoint {rule.endpoint_id})"
+        print(f"{rule.id}  {ep_label}  \"{rule.description}\"")
 
 
 def cmd_rules_add(description: str, route_args: argparse.Namespace) -> None:
+    from app import endpoints_store
+    from app.models import EndpointCreate
     if route_args.webhook:
-        route = WebhookRoute(type="webhook", url=route_args.webhook)
+        ep_data = EndpointCreate(name=description[:40], type="webhook")
     else:
-        route = SmsRoute(type="sms", to=route_args.sms)
-    rule = rules_store.add_rule(RuleCreate(description=description, route=route))
-    print(f"Created: {rule.id}  {rule.route}  \"{rule.description}\"")
+        ep_data = EndpointCreate(name=description[:40], type="sms", to=route_args.sms)
+    ep = endpoints_store.add_endpoint(ep_data)
+    rule = rules_store.add_rule(RuleCreate(description=description, endpoint_id=ep.id))
+    print(f"Created endpoint: {ep.id}  {ep.route}")
+    print(f"Created rule    : {rule.id}  \"{rule.description}\"")
 
 
 def cmd_rules_delete(rule_id: str) -> None:
@@ -116,10 +123,16 @@ async def cmd_send(args: argparse.Namespace) -> None:
     matched = classifier.classify(inbound, rules)
 
     if matched:
+        from app import endpoints_store
+        endpoint = endpoints_store.get_endpoint(matched.endpoint_id)
         print(f"Matched rule : {matched.id}")
         print(f'Description  : "{matched.description}"')
-        print(f"Route        : {matched.route}")
-        matched_route = matched.route
+        if endpoint:
+            print(f"Endpoint     : {endpoint.name} → {endpoint.route}")
+            matched_route = endpoint.route
+        else:
+            print(f"Endpoint     : (missing: {matched.endpoint_id})")
+            matched_route = router.default_route()
     else:
         default = router.default_route()
         print("No rule matched — would use default route.")

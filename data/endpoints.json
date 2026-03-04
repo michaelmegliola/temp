@@ -1,0 +1,29 @@
+[
+  {
+    "id": "0ddc9633-1a67-4875-864a-4545d5d9f23e",
+    "name": "Contractor Desk",
+    "route": {
+      "type": "webhook",
+      "url": "http://localhost:8000/webhooks/contractor_desk"
+    },
+    "created_at": "2026-03-04T17:51:54.413032Z"
+  },
+  {
+    "id": "e538f40e-067c-4c3a-b1bb-b0a9604af245",
+    "name": "Paint Desk",
+    "route": {
+      "type": "webhook",
+      "url": "http://localhost:8000/webhooks/paint_desk"
+    },
+    "created_at": "2026-03-04T18:04:49.728316Z"
+  },
+  {
+    "id": "53b8e88c-02ff-48ca-8612-83067dba8978",
+    "name": "Direct Sales",
+    "route": {
+      "type": "webhook",
+      "url": "http://localhost:8000/webhooks/direct_sales"
+    },
+    "created_at": "2026-03-04T18:04:58.193451Z"
+  }
+]

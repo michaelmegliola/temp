@@ -25,8 +25,12 @@ class Settings(BaseSettings):
     default_route_url: str = ""   # used when type=webhook
     default_route_to: str = ""    # used when type=sms
 
+    # Server
+    base_url: str = "http://localhost:8000"
+
     # Storage
     rules_file: str = "data/rules.json"
+    endpoints_file: str = "data/endpoints.json"
 
 
 settings = Settings()

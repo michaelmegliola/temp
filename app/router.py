@@ -38,7 +38,14 @@ def _send_sms(route: SmsRoute, inbound: InboundSMS) -> None:
 
 
 def send_sms(to: str, message: str) -> None:
-    """Send an SMS via AWS End User Messaging (pinpoint-sms-voice-v2)."""
+    """Send an SMS via AWS End User Messaging (pinpoint-sms-voice-v2).
+
+    If no origination number is configured the call is logged but skipped
+    so the rest of the application keeps working without real AWS credentials.
+    """
+    if not settings.pinpoint_origination_number:
+        logger.info("SMS (dummy — no origination number configured): to=%s body=%r", to, message)
+        return
     client = boto3.client(
         "pinpoint-sms-voice-v2",
         region_name=settings.aws_region,

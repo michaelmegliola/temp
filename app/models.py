@@ -20,21 +20,34 @@ class SmsRoute(BaseModel):
 RouteConfig = Annotated[WebhookRoute | SmsRoute, Field(discriminator="type")]
 
 
+class Endpoint(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    name: str
+    route: RouteConfig
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class EndpointCreate(BaseModel):
+    name: str
+    type: Literal["webhook", "sms"]
+    to: str | None = None  # only for type=sms
+
+
 class Rule(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     description: str
-    route: RouteConfig
+    endpoint_id: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class RuleCreate(BaseModel):
     description: str
-    route: RouteConfig
+    endpoint_id: str
 
 
 class RuleUpdate(BaseModel):
     description: str | None = None
-    route: RouteConfig | None = None
+    endpoint_id: str | None = None
 
 
 class InboundSMS(BaseModel):

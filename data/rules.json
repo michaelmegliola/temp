@@ -1,20 +1,14 @@
 [
   {
-    "id": "2a6b0b74-e239-4739-9041-07d303a501fb",
-    "description": "send flooring questions to cam",
-    "route": {
-      "type": "webhook",
-      "url": "http://localhost:8000/webhooks/flooring"
-    },
-    "created_at": "2026-03-03T16:23:02.675553Z"
+    "id": "c6e4bd65-55b1-4bd0-9105-232d16a714a5",
+    "description": "send questions related to dimensional lumber, fasteners, plywood, or durock (but not tile, flooring, paint, or stain)",
+    "endpoint_id": "0ddc9633-1a67-4875-864a-4545d5d9f23e",
+    "created_at": "2026-03-04T18:04:16.015857Z"
   },
   {
-    "id": "763fa220-1fca-4287-a613-02d98bc0e681",
-    "description": "send dimensional lumber and construction questions to the contractor desk",
-    "route": {
-      "type": "webhook",
-      "url": "http://localhost:8000/webhooks/contractor_desk"
-    },
-    "created_at": "2026-03-03T16:28:18.977696Z"
+    "id": "0b4278f3-1960-4faf-afe1-1a82b4476b67",
+    "description": "send messages related to paint, stain, sealant, adhesives, other coatings",
+    "endpoint_id": "e538f40e-067c-4c3a-b1bb-b0a9604af245",
+    "created_at": "2026-03-04T18:05:22.906385Z"
   }
 ]

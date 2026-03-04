@@ -36,7 +36,7 @@ def get_rule(rule_id: str) -> Rule | None:
 
 def add_rule(data: RuleCreate) -> Rule:
     rules = _load()
-    rule = Rule(description=data.description, route=data.route)
+    rule = Rule(description=data.description, endpoint_id=data.endpoint_id)
     rules.append(rule)
     _save(rules)
     return rule
@@ -53,6 +53,10 @@ def update_rule(rule_id: str, data: RuleUpdate) -> Rule | None:
             _save(rules)
             return updated
     return None
+
+
+def endpoint_in_use(endpoint_id: str) -> bool:
+    return any(r.endpoint_id == endpoint_id for r in _load())
 
 
 def delete_rule(rule_id: str) -> bool:
