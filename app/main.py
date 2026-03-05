@@ -143,6 +143,7 @@ def list_threads():
 class _DropPayload(BaseModel):
     number: str
     message_id: str = ""
+    endpoint_id: str = ""  # if set, route directly to this endpoint instead of running classifier
 
 
 @app.post("/threads/drop", status_code=200)
@@ -155,10 +156,13 @@ async def thread_drop(payload: _DropPayload):
     if not payload.message_id:
         return {"ok": True}
 
-    # Find the original sms_received event and re-route
+    # Find the original message event and re-route.
+    # sms_received comes from the SNS pipeline; dummy_webhook comes from simulate.py send.
+    all_entries = activity_log.entries()
     sms_event = next(
-        (e for e in activity_log.entries()
-         if e.get("event") == "sms_received" and e.get("message_id") == payload.message_id),
+        (e for e in all_entries
+         if e.get("event") in ("sms_received", "dummy_webhook")
+         and e.get("message_id") == payload.message_id),
         None,
     )
     if not sms_event:
@@ -172,11 +176,14 @@ async def thread_drop(payload: _DropPayload):
     )
     mid = inbound.message_id
 
-    # Initial drop (no reply sent yet) → always route to Return to Sender
-    if not was_locked:
-        rts = endpoints_store.get_or_create_return_to_sender()
-        activity_log.record("rule_matched", message_id=mid, description="Initial drop", route=rts.name)
-        route = rts.route
+    if payload.endpoint_id:
+        endpoint = endpoints_store.get_endpoint(payload.endpoint_id)
+        if endpoint:
+            activity_log.record("manual_route", message_id=mid, route=endpoint.name)
+            route = endpoint.route
+            thread_store.set_thread(inbound.origination_number, endpoint.id)
+        else:
+            return {"ok": False, "error": "endpoint not found"}
     else:
         rules = rules_store.list_rules()
         try:
@@ -194,8 +201,9 @@ async def thread_drop(payload: _DropPayload):
                 activity_log.record("rule_matched", message_id=mid, description=matched_rule.description, route="(endpoint missing)")
                 route = router.default_route()
         else:
-            route = router.default_route()
-            activity_log.record("no_rule_matched", message_id=mid, route=str(route))
+            rts = endpoints_store.get_or_create_return_to_sender()
+            activity_log.record("no_rule_matched", message_id=mid, route=rts.name)
+            route = rts.route
 
     try:
         await router.execute_route(route, inbound)
@@ -286,10 +294,10 @@ async def sms_inbound(request: Request):
                 activity_log.record("rule_matched", message_id=mid, description=matched_rule.description, route=endpoint.name)
                 route = endpoint.route
         else:
-            logger.info("No rule matched — using default route")
-            default = router.default_route()
-            activity_log.record("no_rule_matched", message_id=mid, route=str(default))
-            route = default
+            logger.info("No rule matched — routing to Return to Sender")
+            rts = endpoints_store.get_or_create_return_to_sender()
+            activity_log.record("no_rule_matched", message_id=mid, route=rts.name)
+            route = rts.route
 
     try:
         await router.execute_route(route, inbound)

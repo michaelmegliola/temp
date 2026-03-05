@@ -111,38 +111,55 @@ def cmd_http(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 async def cmd_send(args: argparse.Namespace) -> None:
+    from app import endpoints_store, thread_store
     inbound = _build_inbound(args.message, args.from_number, args.to_number)
 
-    rules = rules_store.list_rules()
-    print(f"Loaded {len(rules)} rule(s).")
     print(f"From : {inbound.origination_number}")
     print(f"To   : {inbound.destination_number}")
     print(f'Body : "{inbound.message_body}"')
     print()
 
-    matched = classifier.classify(inbound, rules)
+    routed_endpoint_id: str | None = None
 
-    if matched:
-        from app import endpoints_store
-        endpoint = endpoints_store.get_endpoint(matched.endpoint_id)
-        print(f"Matched rule : {matched.id}")
-        print(f'Description  : "{matched.description}"')
+    active_ep_id = thread_store.get_thread(inbound.origination_number)
+    if active_ep_id:
+        endpoint = endpoints_store.get_endpoint(active_ep_id)
         if endpoint:
-            print(f"Endpoint     : {endpoint.name} → {endpoint.route}")
+            print(f"Thread active → Endpoint: {endpoint.name} → {endpoint.route}")
             matched_route = endpoint.route
+            routed_endpoint_id = endpoint.id
         else:
-            print(f"Endpoint     : (missing: {matched.endpoint_id})")
-            matched_route = router.default_route()
-    else:
-        default = router.default_route()
-        print("No rule matched — would use default route.")
-        print(f"Default route: {default}")
-        matched_route = default
+            thread_store.drop_thread(inbound.origination_number)
+            active_ep_id = None
+
+    if not active_ep_id:
+        rules = rules_store.list_rules()
+        print(f"Loaded {len(rules)} rule(s).")
+        matched = classifier.classify(inbound, rules)
+
+        if matched:
+            endpoint = endpoints_store.get_endpoint(matched.endpoint_id)
+            print(f"Matched rule : {matched.id}")
+            print(f'Description  : "{matched.description}"')
+            if endpoint:
+                print(f"Endpoint     : {endpoint.name} → {endpoint.route}")
+                matched_route = endpoint.route
+                routed_endpoint_id = endpoint.id
+            else:
+                print(f"Endpoint     : (missing: {matched.endpoint_id})")
+                matched_route = router.default_route()
+        else:
+            rts = endpoints_store.get_or_create_return_to_sender()
+            print("No rule matched — routing to Return to Sender.")
+            print(f"Route: {rts.route}")
+            matched_route = rts.route
 
     print()
     if args.execute:
         print("Executing route...")
         await router.execute_route(matched_route, inbound)
+        if routed_endpoint_id:
+            thread_store.set_thread(inbound.origination_number, routed_endpoint_id)
         print("Done.")
     else:
         print("Dry run — pass --execute to actually fire the route.")

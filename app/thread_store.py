@@ -1,4 +1,4 @@
-"""In-memory conversation thread store.
+"""Persistent conversation thread store.
 
 A "thread" locks an origination number to a specific endpoint so that
 subsequent inbound messages bypass rule-matching and go straight to the
@@ -7,21 +7,45 @@ conversation, or when the endpoint is deleted.
 """
 from __future__ import annotations
 
-# origination_number (E.164) → endpoint_id
-_threads: dict[str, str] = {}
+import json
+from pathlib import Path
+
+from .config import settings
+
+
+def _path() -> Path:
+    p = Path(settings.threads_file)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _load() -> dict[str, str]:
+    p = _path()
+    if not p.exists():
+        return {}
+    return json.loads(p.read_text())
+
+
+def _save(threads: dict[str, str]) -> None:
+    _path().write_text(json.dumps(threads, indent=2))
 
 
 def get_thread(number: str) -> str | None:
-    return _threads.get(number)
+    return _load().get(number)
 
 
 def set_thread(number: str, endpoint_id: str) -> None:
-    _threads[number] = endpoint_id
+    threads = _load()
+    threads[number] = endpoint_id
+    _save(threads)
 
 
 def drop_thread(number: str) -> None:
-    _threads.pop(number, None)
+    threads = _load()
+    if number in threads:
+        del threads[number]
+        _save(threads)
 
 
 def list_threads() -> dict[str, str]:
-    return dict(_threads)
+    return _load()

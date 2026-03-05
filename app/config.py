@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # Storage
     rules_file: str = "data/rules.json"
     endpoints_file: str = "data/endpoints.json"
+    threads_file: str = "data/threads.json"
 
 
 settings = Settings()
