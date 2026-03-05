@@ -65,6 +65,22 @@ def add_endpoint(data: EndpointCreate) -> Endpoint:
     return endpoint
 
 
+RETURN_TO_SENDER_NAME = "Return to Sender"
+
+
+def get_or_create_return_to_sender() -> Endpoint:
+    endpoints = _load()
+    existing = next((e for e in endpoints if e.name == RETURN_TO_SENDER_NAME), None)
+    if existing:
+        return existing
+    slug = "return_to_sender"
+    url = f"{settings.base_url.rstrip('/')}/webhooks/{slug}"
+    endpoint = Endpoint(name=RETURN_TO_SENDER_NAME, route=WebhookRoute(type="webhook", url=url))
+    endpoints.append(endpoint)
+    _save(endpoints)
+    return endpoint
+
+
 def delete_endpoint(endpoint_id: str) -> bool:
     endpoints = _load()
     filtered = [e for e in endpoints if e.id != endpoint_id]

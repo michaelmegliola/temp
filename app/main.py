@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -22,7 +23,14 @@ class _SuppressPolling(logging.Filter):
 
 logging.getLogger("uvicorn.access").addFilter(_SuppressPolling())
 
-app = FastAPI(title="SMS Router")
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    endpoints_store.get_or_create_return_to_sender()
+    yield
+
+
+app = FastAPI(title="SMS Router", lifespan=_lifespan)
 
 _STATIC = Path(__file__).parent / "static"
 
@@ -140,13 +148,14 @@ class _DropPayload(BaseModel):
 @app.post("/threads/drop", status_code=200)
 async def thread_drop(payload: _DropPayload):
     """Release the thread lock for a number and re-route the dropped message."""
+    was_locked = thread_store.get_thread(payload.number) is not None
     thread_store.drop_thread(payload.number)
     activity_log.record("thread_dropped", number=payload.number, message_id=payload.message_id)
 
     if not payload.message_id:
         return {"ok": True}
 
-    # Find the original sms_received event and re-route using rules
+    # Find the original sms_received event and re-route
     sms_event = next(
         (e for e in activity_log.entries()
          if e.get("event") == "sms_received" and e.get("message_id") == payload.message_id),
@@ -162,24 +171,31 @@ async def thread_drop(payload: _DropPayload):
         message_id=sms_event["message_id"],
     )
     mid = inbound.message_id
-    rules = rules_store.list_rules()
-    try:
-        matched_rule = classifier.classify(inbound, rules)
-    except Exception as exc:
-        logger.warning("Classifier error after thread drop: %s", exc)
-        matched_rule = None
 
-    if matched_rule:
-        endpoint = endpoints_store.get_endpoint(matched_rule.endpoint_id)
-        if endpoint:
-            activity_log.record("rule_matched", message_id=mid, description=matched_rule.description, route=endpoint.name)
-            route = endpoint.route
-        else:
-            activity_log.record("rule_matched", message_id=mid, description=matched_rule.description, route="(endpoint missing)")
-            route = router.default_route()
+    # Initial drop (no reply sent yet) → always route to Return to Sender
+    if not was_locked:
+        rts = endpoints_store.get_or_create_return_to_sender()
+        activity_log.record("rule_matched", message_id=mid, description="Initial drop", route=rts.name)
+        route = rts.route
     else:
-        route = router.default_route()
-        activity_log.record("no_rule_matched", message_id=mid, route=str(route))
+        rules = rules_store.list_rules()
+        try:
+            matched_rule = classifier.classify(inbound, rules)
+        except Exception as exc:
+            logger.warning("Classifier error after thread drop: %s", exc)
+            matched_rule = None
+
+        if matched_rule:
+            endpoint = endpoints_store.get_endpoint(matched_rule.endpoint_id)
+            if endpoint:
+                activity_log.record("rule_matched", message_id=mid, description=matched_rule.description, route=endpoint.name)
+                route = endpoint.route
+            else:
+                activity_log.record("rule_matched", message_id=mid, description=matched_rule.description, route="(endpoint missing)")
+                route = router.default_route()
+        else:
+            route = router.default_route()
+            activity_log.record("no_rule_matched", message_id=mid, route=str(route))
 
     try:
         await router.execute_route(route, inbound)

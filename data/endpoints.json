@@ -25,5 +25,14 @@
       "url": "http://localhost:8000/webhooks/direct_sales"
     },
     "created_at": "2026-03-04T18:04:58.193451Z"
+  },
+  {
+    "id": "97cbd7af-95f6-4385-b297-5df2e5b131f3",
+    "name": "Return to Sender",
+    "route": {
+      "type": "webhook",
+      "url": "http://localhost:8000/webhooks/return_to_sender"
+    },
+    "created_at": "2026-03-05T16:53:34.139128Z"
   }
 ]
